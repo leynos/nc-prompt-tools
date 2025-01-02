@@ -28,6 +28,12 @@ To apply fixes, run:
 uv run prompt_lint --fix your_prompt_file.json
 ```
 
+The tool works on the extracted JSON version of the prompt:
+
+To convert from JSON to gzip+base64 (suitable for pasting into Novelcrafter), run:  `jq -Mc . <prompt.json | gzip | base64 >prompt.b64`
+
+And from gzip+base64 (as copied from Novelcrafter) to JSON: `base64 -d <prompt.b64 | gunzip | jq . >prompt.json`
+
 ### Features
 
 - ✨ Validates prompt syntax
