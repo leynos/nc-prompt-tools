@@ -1,12 +1,12 @@
-# 🎨 NovelCrafter Prompt Tools
+# 🎨 NC Prompt Tools
 
-Welcome to the NovelCrafter Prompt Tools collection! This jolly set of utilities is designed to make your NovelCrafter experience even more delightful.
+Welcome to the NC Prompt Tools collection! This jolly set of utilities is designed to make your Novelcrafter experience prompting even more delightful.
 
-Note: We are not affiliated in any way with the NovelCrafter developers, platform or service
+Note: We are not affiliated in any way with the Novelcrafter developers, platform or service
 
 ## 🔍 Prompt Lint
 
-Our star tool is the Prompt Lint - your friendly neighborhood prompt checker! It helps ensure your prompts are in tip-top shape before you share them on the NovelCrafter Discord.
+Our star tool is the Prompt Lint - your friendly neighborhood prompt checker! It helps ensure your prompts are in tip-top shape before you share them on the Novelcrafter Discord.
 
 ### Installation
 
@@ -46,4 +46,4 @@ Found a bug? Have a brilliant idea? We'd love to hear from you! Feel free to:
 This project is open source and available under the ISC license.
 
 ---
-Made with ❤️ for the NovelCrafter community
+Made with ❤️ for the Novelcrafter community
