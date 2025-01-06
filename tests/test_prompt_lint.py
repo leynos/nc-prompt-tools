@@ -2,6 +2,7 @@ import pytest
 
 from nc_prompt_tools.prompt_lint import (
     CheckFileBalanceResult,
+    ControlFlowToken,
     parse_braced_expressions,
     check_parentheses_balance,
     naive_fix_expression_if_needed,
@@ -88,9 +89,9 @@ class TestControlFlowParsing:
         tokens = parse_control_flow_tokens(file_content)
         assert len(tokens) == 3
         # Check the types in order
-        assert tokens[0][1] == "IF"
-        assert tokens[1][1] == "ELSE"
-        assert tokens[2][1] == "ENDIF"
+        assert tokens[0][1] == ControlFlowToken.IF
+        assert tokens[1][1] == ControlFlowToken.ELSE
+        assert tokens[2][1] == ControlFlowToken.ENDIF
         # Check that the expression in the IF is 'x > 0'
         assert tokens[0][2].strip() == "(x > 0)"
 
@@ -98,7 +99,7 @@ class TestControlFlowParsing:
         file_content = "{#if ((x > 0) && (y < 0))}stuff{#endif}"
         tokens = parse_control_flow_tokens(file_content)
         assert len(tokens) == 2
-        assert tokens[0][1] == "IF"
+        assert tokens[0][1] == ControlFlowToken.IF
         # Should not raise any error
         assert tokens[0][2] == "((x > 0) && (y < 0))"
 
@@ -106,6 +107,35 @@ class TestControlFlowParsing:
         file_content = "{#if ((x > 0) && (y < 0)}stuff{#endif}"
         with pytest.raises(ParenthesisMismatchError, match="Unbalanced parentheses"):
             _ = parse_control_flow_tokens(file_content)
+
+    def test_elseif_basic_structure(self):
+        file_content = """
+            {#if (x > 0)}
+            First block
+            {#elseif (y < 0)}
+            Second block
+            {#else}
+            Third block
+            {#endif}
+        """
+        tokens = parse_control_flow_tokens(file_content)
+        assert len(tokens) == 4
+        # Check the types in order
+        assert tokens[0][1] == ControlFlowToken.IF
+        assert tokens[0][2].strip() == "(x > 0)"
+        assert tokens[1][1] == ControlFlowToken.ELSEIF
+        assert tokens[1][2].strip() == "(y < 0)"
+        assert tokens[2][1] == ControlFlowToken.ELSE
+        assert tokens[3][1] == ControlFlowToken.ENDIF
+
+    def test_elseif_balanced_expression(self):
+        file_content = "{#if (x > 0)}{#elseif ((y < 0) && (z == 1))}{#endif}"
+        tokens = parse_control_flow_tokens(file_content)
+        assert len(tokens) == 3
+        assert tokens[0][1] == ControlFlowToken.IF
+        assert tokens[1][1] == ControlFlowToken.ELSEIF
+        assert tokens[1][2].strip() == "((y < 0) && (z == 1))"
+        assert tokens[2][1] == ControlFlowToken.ENDIF
 
 
 class TestIfElseEndifStructure:
@@ -122,6 +152,63 @@ class TestIfElseEndifStructure:
         """
         assert check_if_else_endif_structure(file_content) is True
 
+    def test_elseif_validation(self):
+        # Well-formed elseif example
+        file_content = """
+            {#if (a)}
+            first block
+            {#elseif (b)}
+            second block
+            {#elseif (c)}
+            third block
+            {#else}
+            final block
+            {#endif}
+        """
+        assert check_if_else_endif_structure(file_content) is True
+
+        # Nested elseif example
+        file_content_nested = """
+            {#if (x)}
+                outer if
+                {#if (y)}
+                    nested if
+                {#elseif (z)}
+                    nested elseif
+                {#endif}
+            {#elseif (w)}
+                outer elseif
+            {#endif}
+        """
+        assert check_if_else_endif_structure(file_content_nested) is True
+
+    def test_invalid_elseif_structures(self):
+        # elseif after else
+        file_content_elseif_after_else = """
+            {#if (a)}
+            first
+            {#else}
+            else block
+            {#elseif (b)}
+            invalid position
+            {#endif}
+        """
+        with pytest.raises(
+            IfControlMismatchError, match="Encountered {#elseif} after {#else}"
+        ):
+            check_if_else_endif_structure(file_content_elseif_after_else)
+
+        # Missing endif with elseif
+        file_content_missing_endif = """
+            {#if (a)}
+            first
+            {#elseif (b)}
+            second
+        """
+        with pytest.raises(IfControlMismatchError, match="Unmatched {#if}"):
+            check_if_else_endif_structure(file_content_missing_endif)
+
+    def test_error_double_else(self):
         # Missing #endif
         file_content_missing = "{#if (a)} {#else}"
         with pytest.raises(IfControlMismatchError, match="Unmatched {#if}"):
@@ -139,6 +226,20 @@ class TestIfElseEndifStructure:
         """
         with pytest.raises(IfControlMismatchError, match="Encountered second {#else}"):
             check_if_else_endif_structure(file_content_double_else)
+
+    def test_error_standalone_elseif(self):
+        # Standalone elseif without if
+        file_content_standalone_elseif = """
+            some text
+            {#elseif (x)}
+            invalid
+            {#endif}
+        """
+        with pytest.raises(
+            IfControlMismatchError,
+            match="Encountered {#elseif} without matching {#if}",
+        ):
+            check_if_else_endif_structure(file_content_standalone_elseif)
 
 
 class TestFileBalanceChecking:

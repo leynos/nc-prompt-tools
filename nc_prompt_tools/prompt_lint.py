@@ -18,6 +18,7 @@ adheres to best practices and PEP standards.
 from __future__ import annotations
 
 import dataclasses
+import enum
 import json
 import re
 import argparse
@@ -179,28 +180,38 @@ def naive_fix_expression_if_needed(expression: str, start_idx: int) -> str:
     return expression
 
 
-def parse_control_flow_tokens(file_content: str) -> list[tuple[int, str, str]]:
+class ControlFlowToken(enum.StrEnum):
+    IF = "IF"
+    ELSEIF = "ELSEIF"
+    ELSE = "ELSE"
+    ENDIF = "ENDIF"
+
+
+def parse_control_flow_tokens(
+    file_content: str,
+) -> list[tuple[int, ControlFlowToken, str]]:
     """
     Parse the file content for tokens of the form:
-      {#if ( ... )}  {#else}  {#endif}
+      {#if ( ... )}  {#elseif ( ... )}  {#else}  {#endif}
 
     Returns a list of tokens in the order they appear, where each token
-    is (position_in_file, token_name, optional_text). For #if tokens,
+    is (position_in_file, token_name, optional_text). For #if and #elseif tokens,
     the optional_text is the expression inside (...). For #else and
     #endif, optional_text will be ''.
 
     Raises
     ------
     ParenthesisMismatchError
-        If the parentheses in #if expressions are unbalanced.
+        If the parentheses in #if or #elseif expressions are unbalanced.
     """
-    tokens: list[tuple[int, str, str]] = []
+    tokens: list[tuple[int, ControlFlowToken, str]] = []
 
     pattern = re.compile(
         r"""
-        (?P<if>\{\#if\s*(?P<expr>[^}]*)\})    # e.g. {#if (condition)}
-        |(?P<else>\{\#else\})                    # e.g. {#else}
-        |(?P<endif>\{\#endif\})                  # e.g. {#endif}
+        (?P<if>\{\#if\s*(?P<if_expr>[^}]*)\})          # e.g. {#if (condition)}
+        |(?P<elseif>\{\#elseif\s*(?P<elif_expr>[^}]*)\})  # e.g. {#elseif (condition)}
+        |(?P<else>\{\#else\})                          # e.g. {#else}
+        |(?P<endif>\{\#endif\})                        # e.g. {#endif}
         """,
         re.VERBOSE,
     )
@@ -208,31 +219,55 @@ def parse_control_flow_tokens(file_content: str) -> list[tuple[int, str, str]]:
     for match in pattern.finditer(file_content):
         start_idx = match.start()
         if match.group("if"):
-            expr = match.group("expr") or ""
+            expr = match.group("if_expr") or ""
             # Check parentheses are balanced in the #if expression
             if not check_parentheses_balance(expr):
                 raise ParenthesisMismatchError(
                     f"Unbalanced parentheses in #if expression at position {start_idx}: '{expr}'"
                 )
-            tokens.append((start_idx, "IF", expr))
+            tokens.append((start_idx, ControlFlowToken.IF, expr))
+        elif match.group("elseif"):
+            expr = match.group("elif_expr") or ""
+            # Check parentheses are balanced in the #elseif expression
+            if not check_parentheses_balance(expr):
+                raise ParenthesisMismatchError(
+                    f"Unbalanced parentheses in #elseif expression at position {start_idx}: '{expr}'"
+                )
+            tokens.append((start_idx, ControlFlowToken.ELSEIF, expr))
         elif match.group("else"):
-            tokens.append((start_idx, "ELSE", ""))
+            tokens.append((start_idx, ControlFlowToken.ELSE, ""))
         elif match.group("endif"):
-            tokens.append((start_idx, "ENDIF", ""))
+            tokens.append((start_idx, ControlFlowToken.ENDIF, ""))
 
     # Sort tokens by appearance order (though finditer typically is in order)
     tokens.sort(key=lambda t: t[0])
     return tokens
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
+class IfBlockState:
+    """Tracks the state of an #if/#else/#endif block."""
+
+    has_else: bool = False
+    has_elseif: bool = False
+
+    def with_else(self) -> "IfBlockState":
+        """Return a new state with else flag set."""
+        return IfBlockState(has_else=True, has_elseif=self.has_elseif)
+
+    def with_elseif(self) -> "IfBlockState":
+        """Return a new state with elseif flag set."""
+        return IfBlockState(has_else=False, has_elseif=True)
+
+
 def check_if_else_endif_structure(file_content: str) -> bool:
     """
     Check that each {#if (...)} statement is matched with a corresponding
-    {#endif} or {#else} {#endif}, and that each {#else} is matched with
-    a corresponding {#if} that has not yet used an else, etc.
+    {#endif} or {#else}/{#elseif} {#endif}, and that each {#else}/{#elseif}
+    is matched with a corresponding {#if} that has not yet used a terminal else, etc.
 
-    This supports nested if-else blocks.
-
+    This supports nested if-else blocks and allows multiple elseif statements
+    before an optional final else.
     Parameters
     ----------
     file_content : str
@@ -245,36 +280,46 @@ def check_if_else_endif_structure(file_content: str) -> bool:
     Raises
     ------
     IfControlMismatchError
-        If the if/else/endif structure is invalid (e.g., double else,
+        If the if/else/endif structure is invalid (e.g., elseif after else,
         leftover if, unmatched endif).
     """
     tokens = parse_control_flow_tokens(file_content)
 
-    # Stack for #if blocks: we track whether else is used
-    #   push(False) for each {#if}
-    #   on {#else}, check top is not True => set top = True
-    #   on {#endif}, pop
-    stack: list[bool] = []
+    # Stack for #if blocks: we track whether we've hit a terminal else
+    stack: list[IfBlockState] = []
 
     for _, token_type, _ in tokens:
-        if token_type == "IF":
-            stack.append(False)
-        elif token_type == "ELSE":
-            if not stack:
-                raise IfControlMismatchError(
-                    "Encountered {#else} without matching {#if}."
-                )
-            if stack[-1] is True:
-                raise IfControlMismatchError(
-                    "Encountered second {#else} for the same {#if}."
-                )
-            stack[-1] = True
-        elif token_type == "ENDIF":
-            if not stack:
-                raise IfControlMismatchError(
-                    "Encountered {#endif} without matching {#if}."
-                )
-            stack.pop()
+        match token_type:
+            case ControlFlowToken.IF:
+                stack.append(IfBlockState())
+            case ControlFlowToken.ELSEIF:
+                if not stack:
+                    raise IfControlMismatchError(
+                        "Encountered {#elseif} without matching {#if}."
+                    )
+                current = stack[-1]
+                if current.has_else:  # Terminal else already seen
+                    raise IfControlMismatchError(
+                        "Encountered {#elseif} after {#else} in the same {#if} block."
+                    )
+                stack[-1] = current.with_elseif()
+            case ControlFlowToken.ELSE:
+                if not stack:
+                    raise IfControlMismatchError(
+                        "Encountered {#else} without matching {#if}."
+                    )
+                current = stack[-1]
+                if current.has_else:  # Terminal else already seen
+                    raise IfControlMismatchError(
+                        "Encountered second {#else} for the same {#if}."
+                    )
+                stack[-1] = current.with_else()
+            case ControlFlowToken.ENDIF:
+                if not stack:
+                    raise IfControlMismatchError(
+                        "Encountered {#endif} without matching {#if}."
+                    )
+                stack.pop()
 
     if stack:
         # leftover #if
@@ -445,12 +490,15 @@ def load_messages(json_data: typing.Any) -> list[dict[str, str]]:
     raise ValueError('JSON must be in the form {"messages": [...]}')
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True, frozen=True)
 class LintResult:
+    """Represents the result of a linting operation, tracking success and changes."""
+
     success: bool
     had_changes: bool
 
     def tally(self, other) -> LintResult:
+        """Combines this result with another, returning a new LintResult."""
         return LintResult(
             success=self.success and other.success,
             had_changes=self.had_changes or other.had_changes,
