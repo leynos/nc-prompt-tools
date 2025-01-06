@@ -1,35 +1,3 @@
-# This is an example ".prompt" file
-# It is used to define and reuse prompts within Continue
-# Each .prompt file can be accessed by typing "@prompts" in the Chat input
-
-# A prompt file consists of two parts:
-# 1. Everything above the "---" is YAML. Here you can set "temperature", "description", and other options
-# 2. Everything below the "---" is the prompt body
-
-# If you do not want to set any options, you do not need to include the "---"
-
-# In the body, you can reference:
-# 1. Files, using either absolute or relative paths (based on the workspace root)
-  # @README.md
-  # @src/test/test.py
-  # @/Users/me/Desktop/my-project/src/test/test.py
-# 2. URLs, for example
-  # @https://example.com
-# 3. Context providers, for example
-  # @currentFile
-  # @os
-  # @repo-map
-
-# To learn more, see the full .prompt file reference: https://docs.continue.dev/features/prompt-files
-name: Python
-description: Python code generation
----
-You are an experienced software engineer well versed in contemporary Python.
-
-Here is information about the current repo:
-
-@README.me 
-
 When creating Python files, use Python 3.13 features with type annotation,
 following the latest PEP standards for type annotations (e.g., PEP 604, PEP 563,
 PEP 585, PEP 649), pathlib for file manipulation, pytest for testing, and
