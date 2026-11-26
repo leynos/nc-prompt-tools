@@ -28,6 +28,8 @@ import typing
 
 
 class CheckFileBalanceResult(Enum):
+    """Outcome categories returned by check_file_balance."""
+
     OK = auto()
     ILLEGAL_NESTING = auto()
     MISMATCHED_PARENTHESIS = auto()
@@ -181,6 +183,8 @@ def naive_fix_expression_if_needed(expression: str, start_idx: int) -> str:
 
 
 class ControlFlowToken(enum.StrEnum):
+    """Kinds of control-flow tags recognised in prompt text."""
+
     IF = "IF"
     ELSEIF = "ELSEIF"
     ELSE = "ELSE"
@@ -506,6 +510,7 @@ class LintResult:
 
 
 def lint_prompt(prompt: dict, fix: bool) -> LintResult:
+    """Lint every message in a prompt, optionally fixing them in place."""
     # Extract message objects
     try:
         messages = load_messages(prompt)
@@ -542,6 +547,7 @@ def lint_prompt(prompt: dict, fix: bool) -> LintResult:
 
 
 def main() -> None:
+    """Parse command-line arguments, lint a prompt file, and exit with a status."""
     parser = argparse.ArgumentParser(
         description=(
             "Lint messages from a Novelcrafter JSON prompt file "

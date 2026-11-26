@@ -1,3 +1,5 @@
+"""Tests for the prompt linting helpers in nc_prompt_tools.prompt_lint."""
+
 import pytest
 
 from nc_prompt_tools.prompt_lint import (
@@ -18,7 +20,10 @@ from nc_prompt_tools.prompt_lint import (
 
 
 class TestBracedExpressionParsing:
+    """Tests for braced expression parsing."""
+
     def test_basic(self):
+        """Checks that well-formed braced expressions are extracted in order."""
         file_content = "Some text {abc (xyz)} more text {123 (abc)} end"
         expressions = parse_braced_expressions(file_content)
         # We expect two expressions
@@ -28,23 +33,28 @@ class TestBracedExpressionParsing:
         assert expressions[1][2] == "123 (abc)"
 
     def test_nested_braces(self):
+        """Checks that nested braces raise IllegalNestingError."""
         # Attempting nested braces is disallowed, so we should get IllegalNestingError
         file_content = "Text {outer {nested} stuff} more text"
         with pytest.raises(IllegalNestingError):
             _ = parse_braced_expressions(file_content)
 
     def test_unmatched_closing(self):
+        """Checks that a stray closing brace raises BraceMismatchError."""
         file_content = "Text stuff} unbalanced"
         with pytest.raises(BraceMismatchError):
             _ = parse_braced_expressions(file_content)
 
     def test_unmatched_opening(self):
+        """Checks that an unclosed opening brace raises BraceMismatchError."""
         file_content = "Something {abc def"
         with pytest.raises(BraceMismatchError):
             _ = parse_braced_expressions(file_content)
 
 
 class TestParenthesesHandling:
+    """Tests for parenthesis balance checks and naive fixes."""
+
     @pytest.mark.parametrize(
         "expression,expected",
         [
@@ -58,6 +68,7 @@ class TestParenthesesHandling:
         ],
     )
     def test_balance_check(self, expression, expected):
+        """Checks that check_parentheses_balance reports balance correctly."""
         assert check_parentheses_balance(expression) == expected
 
     @pytest.mark.parametrize(
@@ -74,11 +85,15 @@ class TestParenthesesHandling:
         ],
     )
     def test_naive_fix(self, expression, expected_fixed):
+        """Checks that naive_fix_expression_if_needed appends a missing ')'."""
         assert naive_fix_expression_if_needed(expression, 0) == expected_fixed
 
 
 class TestControlFlowParsing:
+    """Tests for control-flow token parsing."""
+
     def test_basic_structure(self):
+        """Checks that if, else, and endif tokens are parsed in order."""
         file_content = """
             {#if (x > 0)}
             Some text
@@ -96,6 +111,7 @@ class TestControlFlowParsing:
         assert tokens[0][2].strip() == "(x > 0)"
 
     def test_balanced_if_expression(self):
+        """Checks that a balanced IF expression is returned intact."""
         file_content = "{#if ((x > 0) && (y < 0))}stuff{#endif}"
         tokens = parse_control_flow_tokens(file_content)
         assert len(tokens) == 2
@@ -104,11 +120,13 @@ class TestControlFlowParsing:
         assert tokens[0][2] == "((x > 0) && (y < 0))"
 
     def test_unbalanced_if_expression(self):
+        """Checks that an unbalanced IF expression raises ParenthesisMismatchError."""
         file_content = "{#if ((x > 0) && (y < 0)}stuff{#endif}"
         with pytest.raises(ParenthesisMismatchError, match="Unbalanced parentheses"):
             _ = parse_control_flow_tokens(file_content)
 
     def test_elseif_basic_structure(self):
+        """Checks that if, elseif, else, and endif tokens are parsed in order."""
         file_content = """
             {#if (x > 0)}
             First block
@@ -129,6 +147,7 @@ class TestControlFlowParsing:
         assert tokens[3][1] == ControlFlowToken.ENDIF
 
     def test_elseif_balanced_expression(self):
+        """Checks that a balanced ELSEIF expression is returned intact."""
         file_content = "{#if (x > 0)}{#elseif ((y < 0) && (z == 1))}{#endif}"
         tokens = parse_control_flow_tokens(file_content)
         assert len(tokens) == 3
@@ -139,7 +158,10 @@ class TestControlFlowParsing:
 
 
 class TestIfElseEndifStructure:
+    """Tests for if/else/endif structure validation."""
+
     def test_basic_validation(self):
+        """Checks that a well-formed nested if/else/endif passes validation."""
         # Well-formed nested example
         file_content = """
             {#if (a)}
@@ -153,6 +175,7 @@ class TestIfElseEndifStructure:
         assert check_if_else_endif_structure(file_content) is True
 
     def test_elseif_validation(self):
+        """Checks that flat and nested elseif chains pass validation."""
         # Well-formed elseif example
         file_content = """
             {#if (a)}
@@ -183,6 +206,7 @@ class TestIfElseEndifStructure:
         assert check_if_else_endif_structure(file_content_nested) is True
 
     def test_invalid_elseif_structures(self):
+        """Checks that an elseif after else and an unclosed if are rejected."""
         # elseif after else
         file_content_elseif_after_else = """
             {#if (a)}
@@ -209,6 +233,7 @@ class TestIfElseEndifStructure:
             check_if_else_endif_structure(file_content_missing_endif)
 
     def test_error_double_else(self):
+        """Checks that a missing endif and a second else are rejected."""
         # Missing #endif
         file_content_missing = "{#if (a)} {#else}"
         with pytest.raises(IfControlMismatchError, match="Unmatched {#if}"):
@@ -228,6 +253,7 @@ class TestIfElseEndifStructure:
             check_if_else_endif_structure(file_content_double_else)
 
     def test_error_standalone_elseif(self):
+        """Checks that an elseif without a matching if is rejected."""
         # Standalone elseif without if
         file_content_standalone_elseif = """
             some text
@@ -243,7 +269,10 @@ class TestIfElseEndifStructure:
 
 
 class TestFileBalanceChecking:
+    """Tests for whole-file balance checking."""
+
     def test_valid_structure(self):
+        """Checks that a balanced file returns CheckFileBalanceResult.OK."""
         file_content = """
             Some text {abc (xyz)}
             {#if (test)}
@@ -255,6 +284,7 @@ class TestFileBalanceChecking:
         assert check_file_balance(file_content) == CheckFileBalanceResult.OK
 
     def test_unbalanced_braces(self):
+        """Checks that mismatched parentheses and braces are reported distinctly."""
         file_content = """
             {abc (xyz}
             {#if (test)}
@@ -273,6 +303,7 @@ class TestFileBalanceChecking:
         )
 
     def test_control_flow_error(self):
+        """Checks that an unclosed if block reports INVALID_FLOW_CONTROL."""
         file_content = """
             {xyz (abc)}
             {#if (condition)}
@@ -284,7 +315,10 @@ class TestFileBalanceChecking:
 
 
 class TestFileContentFixes:
+    """Tests for fixing message content before balance checks."""
+
     def test_naive_fixes(self):
+        """Checks that fix_message_content repairs missing parentheses in braces."""
         # One braced expression with missing parenthesis
         file_content = "Start {abc (xyz} End"
         fixed = fix_message_content(file_content)
@@ -310,6 +344,7 @@ class TestFileContentFixes:
     def test_overall_fix_file_content_scenario(
         self, file_content: str, expected_result: bool
     ):
+        """Checks the balance result of content after fix_message_content runs."""
         # The naive fix addresses missing parenthesis in braces, not control-flow
         fixed = fix_message_content(file_content)
         result = check_file_balance(fixed)
