@@ -23,7 +23,7 @@ help: ## Show available targets
 	awk 'BEGIN {FS=":"; printf "Available targets:\n"} {printf "  %-20s %s\n", $$1, $$2}'
 
 # To list each undocumented definition, run
-# `make interrogate INTERROGATE_TARGETS="-vv nc_prompt_tools tests"`.
+# `make interrogate INTERROGATE_TARGETS="-vv nc_prompt_tools scripts tests"`.
 interrogate: ## Enforce complete Python docstring coverage
 	$(INTERROGATE) $(INTERROGATE_TARGETS)
 
