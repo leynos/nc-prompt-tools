@@ -12,7 +12,7 @@ UV_GATE ?= python3 scripts/uv_gate.py
 # INTERROGATE_TARGETS; add a new Python directory there. No `--python` pin: a
 # managed interpreter would be downloaded.
 INTERROGATE_VERSION ?= 1.7.0
-INTERROGATE_TARGETS ?= nc_prompt_tools tests
+INTERROGATE_TARGETS ?= nc_prompt_tools scripts tests
 INTERROGATE = $(UV_GATE) tool --from 'interrogate==$(INTERROGATE_VERSION)' -- interrogate --fail-under 100
 
 help: ## Show available targets
